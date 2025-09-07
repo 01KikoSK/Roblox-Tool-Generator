@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Roblox Tool Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#7c3aed; --ok:#10b981; --warn:#f59e0b; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+    .card { background: var(--card); border-radius: 12px; padding: 20px; border: 1px solid #1f2937; box-shadow: 0 10px 30px rgba(0,0,0,.3);}
+    h1 { font-size: 24px; margin: 0 0 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 16px; }
+    label { display:block; font-size:14px; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea { width: 100%; background: #0b1220; color: var(--text); border: 1px solid #243043; border-radius: 10px; padding: 10px 12px; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,58,237,.25); }
+    .row { display:flex; gap:12px; align-items:center; }
+    .btn { background: linear-gradient(135deg, var(--accent), #2563eb); border: none; color: white; padding: 10px 14px; border-radius:10px; cursor: pointer; font-weight: 600; }
+    .btn:active { transform: translateY(1px); }
+    .badge { font-size:12px; padding: 2px 8px; border-radius: 999px; border:1px solid #374151; color: var(--muted); }
+    pre { background:#0a0f1e; padding:16px; border-radius:10px; overflow:auto; border:1px solid #1f2937; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    .two { display:grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 980px) { .two { grid-template-columns: 1.1fr .9fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Roblox Tool Generator</h1>
+      <div class="row" style="justify-content:space-between;margin-bottom:10px;">
+        <span class="badge">Pure HTML + JS</span>
+        <span class="badge">Outputs Lua for Studio</span>
+      </div>
+
+      <div class="two">
+        <div class="card" style="background:#0e162b;">
+          <div class="grid">
+            <div>
+              <label>Tool name</label>
+              <input id="toolName" placeholder="GrappleHook" value="GrappleHook">
+            </div>
+            <div>
+              <label>Activation</label>
+              <select id="activation">
+                <option value="Click">Left click</option>
+                <option value="Hold">Hold left click</option>
+                <option value="Key">Key press (E)</option>
+              </select>
+            </div>
+            <div>
+              <label>Tool damage (0 for none)</label>
+              <input id="damage" type="number" min="0" max="500" value="0">
+            </div>
+            <div>
+              <label>Cooldown seconds</label>
+              <input id="cooldown" type="number" min="0" step="0.05" value="0.35">
+            </div>
+            <div>
+              <label>Raycast max distance (studs)</label>
+              <input id="distance" type="number" min="10" max="2000" value="800">
+            </div>
+            <div>
+              <label>Attach mode</label>
+              <select id="attachMode">
+                <option value="PullPlayer">Pull player to hit point</option>
+                <option value="PullTarget">Pull target toward player</option>
+                <option value="RopeOnly">Rope visual only</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <label>Extra features</label>
+            <div class="grid">
+              <label><input type="checkbox" id="drawRope" checked> Draw rope</label>
+              <label><input type="checkbox" id="playSound" checked> Play sound</label>
+              <label><input type="checkbox" id="knockback"> Knockback on hit</label>
+              <label><input type="checkbox" id="antiSpam" checked> Anti-spam debounce</label>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;" class="row">
+            <button class="btn" id="generate">Generate script</button>
+            <button class="btn" style="background:linear-gradient(135deg,#10b981,#059669)" id="copy">Copy</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <label>Output Lua</label>
+            <pre><code id="out">-- Click "Generate script" to create your Tool code here.</code></pre>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <strong>How to use:</strong>
+            <ol>
+              <li><strong>Create tool:</strong> In Roblox Studio, insert a Tool in StarterPack, add a Handle (Part) named "Handle".</li>
+              <li><strong>Script:</strong> Insert a LocalScript inside the Tool, paste the generated code.</li>
+              <li><strong>Test:</strong> Play (F5). Adjust properties in this page and regenerate if needed.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const el = id => document.getElementById(id);
+const out = el('out');
+
+function luaString(s) {
+  return s.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+}
+
+function generate() {
+  const name = el('toolName').value || 'CustomTool';
+  const activation = el('activation').value;
+  const dmg = Math.max(0, Number(el('damage').value || 0));
+  const cd = Math.max(0, Number(el('cooldown').value || 0));
+  const dist = Math.max(1, Number(el('distance').value || 500));
+  const attach = el('attachMode').value;
+  const drawRope = el('drawRope').checked;
+  const playSound = el('playSound').checked;
+  const knockback = el('knockback').checked;
+  const antiSpam = el('antiSpam').checked;
+
+  // Build Lua script
+  const chunks = [];
+
+  chunks.push(`-- ${name} Tool
+-- Generated by HTML Tool Generator
+-- Place this LocalScript inside a Tool with a Part named "Handle"
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local tool = script.Parent
+tool.Name = "${luaString(name)}"
+local player = Players.LocalPlayer
+local character
+local humanoid
+local root
+
+local lastUse = 0
+local cooldown = ${cd}
+local maxDist = ${dist}
+local damage = ${dmg}
+
+local equipped = false
+local mouse
+`);
+
+  if (playSound) {
+    chunks.push(`local sound = Instance.new("Sound")
+sound.SoundId = "rbxassetid://12221967" -- whoosh; replace as needed
+sound.Volume = 0.4
+sound.Name = "Fire"
+sound.Parent = tool:FindFirstChild("Handle") or tool
+`);
+  }
+
+  if (drawRope) {
+    chunks.push(`local rope
+local beam
+local att0
+local att1
+`);
+  }
+
+  chunks.push(`local function now()
+  return tick()
+end
+
+local function setupCharacter()
+  character = player.Character or player.CharacterAdded:Wait()
+  humanoid = character:WaitForChild("Humanoid")
+  root = character:WaitForChild("HumanoidRootPart")
+end
+
+local function withinCooldown()
+  if ${antiSpam ? 'true' : 'false'} then
+    if now() - lastUse < cooldown then return true end
+  end
+  return false
+end
+`);
+
+  if (drawRope) {
+    chunks.push(`local function ensureBeam()
+  if beam then return end
+  att0 = Instance.new("Attachment")
+  att0.Name = "ToolAttach"
+  local handle = tool:FindFirstChild("Handle")
+  if handle and handle:IsA("BasePart") then
+    att0.Parent = handle
+  else
+    att0.Parent = tool
+  end
+  att1 = Instance.new("Attachment")
+  att1.Name = "WorldAttach"
+  att1.Parent = workspace.Terrain
+
+  beam = Instance.new("Beam")
+  beam.Attachment0 = att0
+  beam.Attachment1 = att1
+  beam.Width0 = 0.05
+  beam.Width1 = 0.05
+  beam.FaceCamera = true
+  beam.Color = ColorSequence.new(Color3.fromRGB(200,200,255), Color3.fromRGB(140,140,255))
+  beam.Transparency = NumberSequence.new(0.05)
+  beam.LightInfluence = 0.5
+  beam.Segments = 2
+  beam.Enabled = false
+  beam.Parent = tool
+end
+
+local function hideBeam()
+  if beam then beam.Enabled = false end
+end
+`);
+  }
+
+  chunks.push(`local function raycastFromCamera(distance)
+  local cam = workspace.CurrentCamera
+  if not cam then return end
+  local origin = cam.CFrame.Position
+  local dir = cam.CFrame.LookVector * distance
+  local params = RaycastParams.new()
+  params.FilterDescendantsInstances = {character, tool}
+  params.FilterType = Enum.RaycastFilterType.Exclude
+  return workspace:Raycast(origin, dir, params)
+end
+`);
+
+  if (dmg > 0 || knockback) {
+    chunks.push(`local function applyHitEffects(hitPart, hitPoint, normal)
+  local maybeHum = hitPart and hitPart.Parent and hitPart.Parent:FindFirstChildOfClass("Humanoid")
+  if maybeHum then
+    ${dmg > 0 ? 'maybeHum:TakeDamage(damage)' : ''}
+    ${knockback ? 'local hrp = maybeHum.Parent:FindFirstChild("HumanoidRootPart"); if hrp then hrp.AssemblyLinearVelocity += (hrp.Position - root.Position).Unit * 40 end' : ''}
+  end
+end
+`);
+  }
+
+  chunks.push(`local using = false
+
+local function fire()
+  if withinCooldown() or using then return end
+  using = true
+  lastUse = now()
+  ${playSound ? 'pcall(function() sound:Play() end)' : ''}
+
+  local res = raycastFromCamera(maxDist)
+  if not res then using = false ${drawRope ? '; hideBeam()' : ''} return end
+
+  local hitPos = res.Position
+  local normal = res.Normal
+  local part = res.Instance
+
+  ${dmg > 0 || knockback ? 'applyHitEffects(part, hitPos, normal)' : ''}
+
+  ${drawRope ? `
+  ensureBeam()
+  att1.WorldPosition = hitPos
+  beam.Enabled = true
+  ` : ''}
+
+  -- Movement / attach behavior
+  ${attach === 'PullPlayer' ? `
+  -- Pull player to the hit point
+  local duration = math.clamp((hitPos - root.Position).Magnitude / 180, 0.15, 1.25)
+  local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = CFrame.new(hitPos + Vector3.new(0,2,0))})
+  tween:Play()
+  tween.Completed:Wait()
+  ` : ''}
+
+  ${attach === 'PullTarget' ? `
+  -- Pull target toward the player if it is movable
+  local hp = part:IsA("BasePart") and part or nil
+  if hp and hp.AssemblyLinearVelocity then
+    local dir = (root.Position - hitPos).Unit
+    hp.AssemblyLinearVelocity += dir * 120
+  end
+  ` : ''}
+
+  ${drawRope ? 'hideBeam()' : ''}
+
+  task.delay(cooldown, function()
+    using = false
+  end)
+end
+`);
+
+  chunks.push(`local function equip()
+  setupCharacter()
+  equipped = true
+end
+
+local function unequip()
+  equipped = false
+  ${drawRope ? 'hideBeam()' : ''}
+end
+`);
+
+  chunks.push(`tool.Equipped:Connect(function(m)
+  mouse = m
+  equip()
+  ${activation === 'Click' ? 'if mouse then mouse.Button1Down:Connect(fire) end' : ''}
+end)
+
+tool.Unequipped:Connect(unequip)
+`);
+
+  if (activation === 'Hold') {
+    chunks.push(`local holding = false
+tool.Equipped:Connect(function(m)
+  if not mouse then return end
+  mouse.Button1Down:Connect(function()
+    holding = true
+    while holding do
+      fire()
+      task.wait(cooldown)
+    end
+  end)
+  mouse.Button1Up:Connect(function()
+    holding = false
+  end)
+end)
+`);
+  }
+
+  if (activation === 'Key') {
+    chunks.push(`tool.Equipped:Connect(function()
+  local conn
+  conn = UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.E then
+      fire()
+    end
+  end)
+  tool.Unequipped:Connect(function()
+    if conn then conn:Disconnect() end
+  end)
+end)
+`);
+  }
+
+  chunks.push(`-- Ready. Make sure your Tool has a "Handle" part for sounds/attachments.
+`);
+
+  out.textContent = chunks.join('\\n');
+}
+
+el('generate').addEventListener('click', generate);
+el('copy').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(out.textContent);
+  const btn = document.getElementById('copy');
+  const old = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = old, 1200);
+});
+</script>
+</body>
+</html>
